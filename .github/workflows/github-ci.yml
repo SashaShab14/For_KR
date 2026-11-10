@@ -7,40 +7,33 @@ on:
 
 jobs:
   build-and-deploy:
-    name: Сборка Docker образа и Деплой в среду WSL2 Linux
+    name: Build and Deploy Go App to WSL2
     runs-on: self-hosted
-
+    
     steps:
-      - name: Шаг 1: Извлечение моментального снимка кодовой базы из репозитория
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Шаг 2: Санация хост-окружения и принудительное удаление старых контейнеров
+      - name: Clean host environment
         run: |
           if [ "$(sudo docker ps -aq -f name=go-demo-container)" ]; then
-            echo "Обнаружен старый контейнер. Принудительная остановка..."
             sudo docker stop go-demo-container
             sudo docker rm go-demo-container
           fi
 
-      - name: Шаг 3: Послойная компиляция нового статического Docker-образа
+      - name: Compile Docker Image
         run: sudo docker build --pull -t go-demo-app:latest .
 
-      - name: Шаг 4: Инициализация экземпляра контейнера со сквозным пробросом портов
-        run: |
-          sudo docker run -d \
-            --name go-demo-container \
-            -p 8888:8888 \
-            --restart always \
-            go-demo-app:latest
+      - name: Deploy New Container
+        run: sudo docker run -d --name go-demo-container -p 8888:8888 --restart always go-demo-app:latest
 
-      - name: Шаг 5: Автоматизированное интеграционное тестирование работоспособности службы
+      - name: Integration Integration Test Health Check
         run: |
-          echo "Ожидание инициализации сетевых сокетов Go-приложения..."
           sleep 4
           HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8888/)
           if [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "Интеграционный тест успешно пройден! Сервер отвечает статус-кодом 200 OK."
+            echo "Success 200 OK"
           else
-            echo "Сбой развертывания! Сервер вернул код $HTTP_STATUS"
+            echo "Failed"
             exit 1
           fi
