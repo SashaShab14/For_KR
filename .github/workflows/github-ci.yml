@@ -1,0 +1,46 @@
+name: Go App GitHub Flow Automation Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    name: Сборка Docker образа и Деплой в среду WSL2 Linux
+    runs-on: self-hosted
+
+    steps:
+      - name: Шаг 1: Извлечение моментального снимка кодовой базы из репозитория
+        uses: actions/checkout@v3
+
+      - name: Шаг 2: Санация хост-окружения и принудительное удаление старых контейнеров
+        run: |
+          if [ "$(sudo docker ps -aq -f name=go-demo-container)" ]; then
+            echo "Обнаружен старый контейнер. Принудительная остановка..."
+            sudo docker stop go-demo-container
+            sudo docker rm go-demo-container
+          fi
+
+      - name: Шаг 3: Послойная компиляция нового статического Docker-образа
+        run: sudo docker build --pull -t go-demo-app:latest .
+
+      - name: Шаг 4: Инициализация экземпляра контейнера со сквозным пробросом портов
+        run: |
+          sudo docker run -d \
+            --name go-demo-container \
+            -p 8888:8888 \
+            --restart always \
+            go-demo-app:latest
+
+      - name: Шаг 5: Автоматизированное интеграционное тестирование работоспособности службы
+        run: |
+          echo "Ожидание инициализации сетевых сокетов Go-приложения..."
+          sleep 4
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8888/)
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "Интеграционный тест успешно пройден! Сервер отвечает статус-кодом 200 OK."
+          else
+            echo "Сбой развертывания! Сервер вернул код $HTTP_STATUS"
+            exit 1
+          fi
